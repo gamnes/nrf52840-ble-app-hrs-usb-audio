@@ -3367,6 +3367,11 @@
                 </FileArmAds>
               </FileOption>
             </File>
+            <File>
+              <FileName>nrf_queue.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\components\libraries\queue\nrf_queue.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -7400,6 +7405,11 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
+            </File>
+            <File>
+              <FileName>nrf_queue.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\components\libraries\queue\nrf_queue.c</FilePath>
             </File>
           </Files>
         </Group>

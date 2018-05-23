@@ -78,6 +78,9 @@
 #include "nrf_delay.h"
 
 #include "application_usb_audio.h"
+#include "nrf_atfifo.h"
+#include "nrf_balloc.h"
+#include "nrf_queue.h"
 
 #include "drv_sgtl5000.h"
 
@@ -90,7 +93,7 @@
 #define MANUFACTURER_NAME                   "NordicSemiconductor"                   /**< Manufacturer. Will be passed to Device Information Service. */
 #define APP_ADV_INTERVAL                    300                                     /**< The advertising interval (in units of 0.625 ms. This value corresponds to 187.5 ms). */
 
-#define APP_ADV_DURATION                    18000                                   /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
+#define APP_ADV_DURATION                    0                                       /**< The advertising duration (0 - means it will never timeout) in units of 10 milliseconds. */
 
 #define APP_BLE_CONN_CFG_TAG                1                                       /**< A tag identifying the SoftDevice BLE configuration. */
 #define APP_BLE_OBSERVER_PRIO               3                                       /**< Application's BLE observer priority. You shouldn't need to modify this value. */
@@ -163,9 +166,8 @@ static ble_uuid_t m_adv_uuids[] =                                   /**< Univers
 
 
 /************************************************************
-*   Include support for SGTL5000. 
+*   Include support for SGTL5000 and USB Audio buffer management
 ************************************************************/
-#include "drv_sgtl5000.h"
 #define AUDIO_FRAME_WORDS                   384
 #define AUDIO_FRAME_SIZE_BYTES              (AUDIO_FRAME_WORDS * sizeof(uint32_t))
 #define I2S_BUFFER_SIZE_WORDS               AUDIO_FRAME_WORDS * 2   // Double buffered - I2S lib will switch between using first and second half
@@ -173,10 +175,75 @@ static uint32_t  m_i2s_tx_buffer[I2S_BUFFER_SIZE_WORDS];
 static uint32_t  m_i2s_rx_buffer[I2S_BUFFER_SIZE_WORDS];
 
 STATIC_ASSERT(DRV_SGTL5000_EGU_IRQPriority == USBD_CONFIG_IRQ_PRIORITY);
+  
+#define AUDIO_FRAME_DURATION_MS ((AUDIO_FRAME_SIZE_BYTES * 1000) / (USBD_AUDIO_SAMPLE_FREQ * USBD_AUDIO_CHANNELS * USBD_AUDIO_RESOLUTION / 8))
+#define AUDIO_FRAME_POOL_SIZE ((USBD_AUDIO_SAMPLE_FREQ ) / (AUDIO_FRAME_WORDS * 5)) /* 1 / 5 seconds of audio */
+#define AUDIO_FIFO_WATERMARK_LOW (AUDIO_FRAME_POOL_SIZE / 2)
+     
+NRF_BALLOC_DEF(m_audio_frame_pool, (AUDIO_FRAME_WORDS * USBD_AUDIO_CHANNELS * (USBD_AUDIO_RESOLUTION / 8)), AUDIO_FRAME_POOL_SIZE);
+NRF_QUEUE_DEF(void*, m_audio_frame_playback_queue, AUDIO_FRAME_POOL_SIZE, NRF_QUEUE_MODE_NO_OVERFLOW);
+
+static volatile bool     m_sample_count_updated  = false;
+static volatile uint32_t m_recv_hp_sample_count  = 0;
+static volatile uint32_t m_recv_buffer_overruns  = 0;
+static volatile uint32_t m_recv_buffer_underruns = 0;
+static bool              m_sgtl5000_running      = false;
+
 
 static bool i2s_sgtl5000_driver_evt_handler(drv_sgtl5000_evt_t * p_evt)
 {
     bool continue_running = true;
+    //NRF_LOG_INFO("i2s_sgtl5000_driver_evt_handler %d", p_evt->evt);
+
+    switch (p_evt->evt)
+    {
+        case DRV_SGTL5000_EVT_I2S_RX_BUF_RECEIVED:
+            {
+                //NRF_LOG_INFO("i2s_sgtl5000_driver_evt_handler RX BUF RECEIVED");
+                // TODO: Handle RX as desired - for this example, we dont use RX for anything
+                //uint16_t * p_buffer  = (uint16_t *) p_evt->param.rx_buf_received.p_data_received;
+            }
+            break;
+        case DRV_SGTL5000_EVT_I2S_TX_BUF_REQ:
+            {
+                // Copy data from FIFO. If FIFO is completely empty, treat this as "audio stopped".
+                // For simplicity, keep I2S running always and just send 0-value samples when FIFO is empty
+                // Audio will resume once the FIFO is full past the watermark level
+                
+                // TODO: Add logic to actively monitor queue/frame level and insert/remove samples in case of audio frequency mismatch between audio producer and consumer
+                
+                APP_ERROR_CHECK_BOOL((p_evt->param.tx_buf_req.number_of_words * sizeof(uint32_t)) == AUDIO_FRAME_SIZE_BYTES);
+                
+                if (m_sgtl5000_running)
+                {
+                    ret_code_t err_code;
+                    uint8_t *  p_frame;
+                    
+                    err_code = nrf_queue_pop(&m_audio_frame_playback_queue, (void**)&p_frame);
+                    if (err_code != NRF_SUCCESS)
+                    {
+                        m_recv_buffer_underruns += 1;
+                        m_sgtl5000_running       = false;
+                        NRF_LOG_INFO("m_recv_buffer_underruns %d", m_recv_buffer_underruns);
+                        break;
+                    }
+                    
+                    // NOTE: Inefficient due to I2S driver implementation. Better to pass balloc pointer to driver and free after playback
+                    memcpy(p_evt->param.tx_buf_req.p_data_to_send, p_frame, AUDIO_FRAME_SIZE_BYTES);
+                    
+                    nrf_balloc_free(&m_audio_frame_pool, p_frame);
+                }
+                else
+                {
+                    // Use zero-valued samples when FIFO is empty
+                    memset(p_evt->param.tx_buf_req.p_data_to_send, 0, (p_evt->param.tx_buf_req.number_of_words * sizeof(uint32_t)));
+                }
+                
+                // Always keep I2S running for now to keep it simple
+                continue_running = true;
+            }
+            break;
+    }
 
     return continue_running;
 }
@@ -1062,7 +1129,82 @@ static void application_usb_audio_callback(application_usb_audio_event_t *event)
             break;
             
         // TODO: Add events for handling sound input/output. For now only the default loopback mechanism is in place!
+        case AUA_EVENT_USB_USER_EVT_RX_DONE:
+        {    
+            /* USB Audio Block received - Pass on to I2S*/
+            static uint8_t * mp_current_frame    = 0;
+            static size_t    m_current_frame_idx = 0;
             
+            ret_code_t err_code;
+            uint8_t *  p_samples;
+            size_t     bytes_to_copy;
+            
+            p_samples     = (void*) event->temp_buffer;
+            bytes_to_copy = event->temp_buffer_size;
+            
+            m_recv_hp_sample_count += bytes_to_copy;
+            if (bytes_to_copy == 0)
+            {
+                break;
+            }
+            
+            do
+            {
+                err_code = NRF_SUCCESS;
+                
+                if (mp_current_frame == 0)
+                {
+                    // Allocate new frame from pool
+                    mp_current_frame = nrf_balloc_alloc(&m_audio_frame_pool);
+                    if (mp_current_frame == 0)
+                    {
+                        m_recv_buffer_overruns += 1;
+                        err_code = NRF_ERROR_NO_MEM;
+                        NRF_LOG_INFO("m_recv_buffer_overruns %d", m_recv_buffer_overruns);
+                        break;
+                    }
+                    m_current_frame_idx = 0;
+                }
+                
+                if (m_current_frame_idx <= (AUDIO_FRAME_SIZE_BYTES - bytes_to_copy))
+                {
+                    // Still room in frame
+                    memcpy(&mp_current_frame[m_current_frame_idx], p_samples, bytes_to_copy);
+                    m_current_frame_idx += bytes_to_copy;
+                    p_samples           += bytes_to_copy;
+                    bytes_to_copy        = 0;
+                }
+                else
+                {
+                    size_t bytes_left_in_frame;
+                    
+                    bytes_left_in_frame = AUDIO_FRAME_SIZE_BYTES - m_current_frame_idx;
+                    
+                    memcpy(&mp_current_frame[m_current_frame_idx], p_samples, bytes_left_in_frame);
+                    
+                    m_current_frame_idx += bytes_left_in_frame;
+                    p_samples           += bytes_left_in_frame;
+                    bytes_to_copy       -= bytes_left_in_frame;
+                    
+                    APP_ERROR_CHECK_BOOL(m_current_frame_idx == AUDIO_FRAME_SIZE_BYTES);
+                }
+                
+                if (m_current_frame_idx == AUDIO_FRAME_SIZE_BYTES)
+                {
+                    APP_ERROR_CHECK(nrf_queue_push(&m_audio_frame_playback_queue, (void**)&mp_current_frame));
+                    mp_current_frame = 0;
+                }
+            } while (err_code == NRF_SUCCESS && bytes_to_copy > 0);
+            
+            if (!m_sgtl5000_running && (nrf_queue_available_get(&m_audio_frame_playback_queue) < AUDIO_FIFO_WATERMARK_LOW))
+            {
+                // If codec has been stopped, now enough data has been received for it to be started again
+                m_sgtl5000_running = true;
+            }
+            
+            m_sample_count_updated = true;
+            break;
+        }
         default:
             break;
     }
@@ -1089,6 +1231,8 @@ int main(void)
     buttons_leds_init(&erase_bonds);
     power_management_init();
     
+    APP_ERROR_CHECK(nrf_balloc_init(&m_audio_frame_pool));
+    
     // Enable audio
     drv_sgtl5000_init_t sgtl_drv_params;
     sgtl_drv_params.i2s_tx_buffer           = (void*)m_i2s_tx_buffer;
@@ -1101,9 +1245,13 @@ int main(void)
     drv_sgtl5000_stop();
     NRF_LOG_INFO("Audio initialization done.");
     
-    /* Demonstrate Mic loopback */
-    NRF_LOG_INFO("Loop in main and loopback MIC data.");
-    drv_sgtl5000_start_mic_loopback();
+//    /* Demonstrate Mic loopback */
+//    NRF_LOG_INFO("Loop in main and loopback MIC data.");
+//    drv_sgtl5000_start_mic_loopback();
+
+    /* Demonstrate playback from application handler */
+    m_sgtl5000_running = false;
+    drv_sgtl5000_start();
    
     
     application_usb_audio_init(&appl_usb_audio_config);

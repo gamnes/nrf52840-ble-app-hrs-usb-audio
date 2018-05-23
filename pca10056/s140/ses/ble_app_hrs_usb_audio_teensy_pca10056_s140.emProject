@@ -71,6 +71,7 @@
       <file file_name="../../../../../../components/libraries/experimental_section_vars/nrf_section_iter.c" />
       <file file_name="../../../../../../components/libraries/strerror/nrf_strerror.c" />
       <file file_name="../../../../../../components/libraries/sensorsim/sensorsim.c" />
+      <file file_name="../../../../../../components/libraries/queue/nrf_queue.c" />
     </folder>
     <folder Name="None">
       <file file_name="../../../../../../modules/nrfx/mdk/ses_nRF_Startup.s" />

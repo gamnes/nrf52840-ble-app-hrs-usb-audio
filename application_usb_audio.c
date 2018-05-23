@@ -79,11 +79,11 @@ static void mic_audio_user_ev_handler(app_usbd_class_inst_t const * p_inst,
  */
 APP_USBD_AUDIO_FORMAT_DESCRIPTOR(mic_form_desc, 
                                  APP_USBD_AUDIO_AS_FORMAT_I_DSC(    /* Format type 1 descriptor */
-                                    2,                              /* Number of channels */
+                                    USBD_AUDIO_CHANNELS,            /* Number of channels */
                                     2,                              /* Subframe size */
-                                    16,                             /* Bit resolution */
+                                    USBD_AUDIO_RESOLUTION,          /* Bit resolution */
                                     1,                              /* Frequency type */
-                                    APP_USBD_U24_TO_RAW_DSC(48000)) /* Frequency */
+                                    APP_USBD_U24_TO_RAW_DSC(USBD_AUDIO_SAMPLE_FREQ)) /* Frequency */
                                 );
 
 /**
@@ -124,11 +124,11 @@ APP_USBD_AUDIO_FEATURE_DESCRIPTOR(mic_fea_desc,
  */
 APP_USBD_AUDIO_FORMAT_DESCRIPTOR(hp_form_desc, 
                                     APP_USBD_AUDIO_AS_FORMAT_III_DSC( /* Format type 3 descriptor */
-                                    2,                                /* Number of channels */
+                                    USBD_AUDIO_CHANNELS,              /* Number of channels */
                                     2,                                /* Subframe size */
-                                    16,                               /* Bit resolution */
+                                    USBD_AUDIO_RESOLUTION,            /* Bit resolution */
                                     1,                                /* Frequency type */
-                                    APP_USBD_U24_TO_RAW_DSC(48000))   /* Frequency */
+                                    APP_USBD_U24_TO_RAW_DSC(USBD_AUDIO_SAMPLE_FREQ))   /* Frequency */
                                 );
 
 /**
@@ -215,16 +215,16 @@ APP_USBD_AUDIO_GLOBAL_DEF(m_app_audio_microphone,
 /*lint -restore*/
 
 /**
- * @brief Internal audio temporary buffer
+ * @brief Internal and pass to APP audio temporary buffer
  */
-static int16_t  m_temp_buffer[2 * BUFFER_SIZE];
+int16_t  m_temp_buffer[2 * BUFFER_SIZE];
 
 
 
 /**
  * @brief The size of last received block from the microphone
  */
-static size_t m_temp_buffer_size;
+size_t m_temp_buffer_size;
 
 /**
  * @brief Actual headphones mute
@@ -361,6 +361,14 @@ static void hp_audio_user_ev_handler(app_usbd_class_inst_t const * p_inst,
             break;
         case APP_USBD_AUDIO_USER_EVT_RX_DONE:
         {
+            if(m_usb_audio_callback)
+            {
+                m_usb_audio_event.event_type = AUA_EVENT_USB_USER_EVT_RX_DONE;
+                m_usb_audio_event.temp_buffer = m_temp_buffer;
+                m_usb_audio_event.temp_buffer_size = m_temp_buffer_size;
+                m_usb_audio_callback(&m_usb_audio_event);
+            }
+            
             ret_code_t ret;
             /* Block from headphones copied into buffer, send it into microphone input */
             ret = app_usbd_audio_class_tx_start(&m_app_audio_microphone.base, m_temp_buffer, m_temp_buffer_size);
