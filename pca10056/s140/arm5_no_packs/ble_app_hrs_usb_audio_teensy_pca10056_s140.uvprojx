@@ -10,7 +10,7 @@
       <TargetName>nrf52840_xxaa</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
-      <pCCUsed>5060750::V5.06 update 6 (build 750)::ARMCC</pCCUsed>
+      <pCCUsed>5060061::V5.06 update 1 (build 61)::ARMCC</pCCUsed>
       <TargetOption>
         <TargetCommonOption>
           <Device>nRF52840_xxAA</Device>
@@ -389,6 +389,11 @@
               <FileName>application_usb_audio.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\application_usb_audio.c</FilePath>
+            </File>
+            <File>
+              <FileName>drv_sgtl5000.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\drv_sgtl5000.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -2093,6 +2098,21 @@
               <FileName>nrfx_power.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\..\..\modules\nrfx\drivers\src\nrfx_power.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrf_drv_twi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\integration\nrfx\legacy\nrf_drv_twi.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrfx_twim.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\modules\nrfx\drivers\src\nrfx_twim.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrfx_i2s.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\modules\nrfx\drivers\src\nrfx_i2s.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -4404,6 +4424,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\application_usb_audio.c</FilePath>
             </File>
+            <File>
+              <FileName>drv_sgtl5000.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\drv_sgtl5000.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -6107,6 +6132,21 @@
               <FileName>nrfx_power.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\..\..\modules\nrfx\drivers\src\nrfx_power.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrf_drv_twi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\integration\nrfx\legacy\nrf_drv_twi.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrfx_twim.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\modules\nrfx\drivers\src\nrfx_twim.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrfx_i2s.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\modules\nrfx\drivers\src\nrfx_i2s.c</FilePath>
             </File>
           </Files>
         </Group>

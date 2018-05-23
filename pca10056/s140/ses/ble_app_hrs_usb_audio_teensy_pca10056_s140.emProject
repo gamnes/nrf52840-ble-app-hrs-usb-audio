@@ -1,5 +1,8 @@
 <!DOCTYPE CrossStudio_Project_File>
-<solution Name="ble_app_hrs_usb_audio_teensy_pca10056_s140" target="8" version="2">
+<solution
+  Name="ble_app_hrs_usb_audio_teensy_pca10056_s140"
+  target="8"
+  version="2">
   <project Name="ble_app_hrs_usb_audio_teensy_pca10056_s140">
     <configuration
       Name="Common"
@@ -89,6 +92,9 @@
       <file file_name="../../../../../../components/drivers_nrf/usbd/nrf_drv_usbd.c" />
       <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_power.c" />
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_power.c" />
+      <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_twi.c" />
+      <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_twim.c" />
+      <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_i2s.c" />
     </folder>
     <folder Name="Board Support">
       <file file_name="../../../../../../components/libraries/bsp/bsp.c" />
@@ -98,6 +104,7 @@
       <file file_name="../../../main.c" />
       <file file_name="../config/sdk_config.h" />
       <file file_name="../../../application_usb_audio.c" />
+      <file file_name="../../../drv_sgtl5000.c" />
     </folder>
     <folder Name="nRF_Segger_RTT">
       <file file_name="../../../../../../external/segger_rtt/SEGGER_RTT.c" />

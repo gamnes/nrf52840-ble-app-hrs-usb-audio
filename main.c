@@ -75,8 +75,11 @@
 #include "ble_conn_state.h"
 #include "nrf_pwr_mgmt.h"
 #include "nrf_drv_clock.h"
+#include "nrf_delay.h"
 
 #include "application_usb_audio.h"
+
+#include "drv_sgtl5000.h"
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -156,6 +159,28 @@ static ble_uuid_t m_adv_uuids[] =                                   /**< Univers
     {BLE_UUID_BATTERY_SERVICE,              BLE_UUID_TYPE_BLE},
     {BLE_UUID_DEVICE_INFORMATION_SERVICE,   BLE_UUID_TYPE_BLE}
 };
+
+
+
+/************************************************************
+*   Include support for SGTL5000. 
+************************************************************/
+#include "drv_sgtl5000.h"
+#define AUDIO_FRAME_WORDS                   384
+#define AUDIO_FRAME_SIZE_BYTES              (AUDIO_FRAME_WORDS * sizeof(uint32_t))
+#define I2S_BUFFER_SIZE_WORDS               AUDIO_FRAME_WORDS * 2   // Double buffered - I2S lib will switch between using first and second half
+static uint32_t  m_i2s_tx_buffer[I2S_BUFFER_SIZE_WORDS];
+static uint32_t  m_i2s_rx_buffer[I2S_BUFFER_SIZE_WORDS];
+
+STATIC_ASSERT(DRV_SGTL5000_EGU_IRQPriority == USBD_CONFIG_IRQ_PRIORITY);
+
+static bool i2s_sgtl5000_driver_evt_handler(drv_sgtl5000_evt_t * p_evt)
+{
+    bool continue_running = true;
+
+    return continue_running;
+}
+
 
 
 /**@brief Callback function for asserts in the SoftDevice.
@@ -1063,6 +1088,23 @@ int main(void)
     timers_init();
     buttons_leds_init(&erase_bonds);
     power_management_init();
+    
+    // Enable audio
+    drv_sgtl5000_init_t sgtl_drv_params;
+    sgtl_drv_params.i2s_tx_buffer           = (void*)m_i2s_tx_buffer;
+    sgtl_drv_params.i2s_rx_buffer           = (void*)m_i2s_rx_buffer;
+    sgtl_drv_params.i2s_buffer_size_words   = I2S_BUFFER_SIZE_WORDS;
+    sgtl_drv_params.i2s_evt_handler         = i2s_sgtl5000_driver_evt_handler;
+    sgtl_drv_params.fs                      = DRV_SGTL5000_FS_31250HZ;
+    
+    drv_sgtl5000_init(&sgtl_drv_params);
+    drv_sgtl5000_stop();
+    NRF_LOG_INFO("Audio initialization done.");
+    
+    /* Demonstrate Mic loopback */
+    NRF_LOG_INFO("Loop in main and loopback MIC data.");
+    drv_sgtl5000_start_mic_loopback();
+   
     
     application_usb_audio_init(&appl_usb_audio_config);
     
