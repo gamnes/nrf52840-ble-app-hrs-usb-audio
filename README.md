@@ -53,18 +53,22 @@ One all the modification are done (Audio board, Teensy Shield, and nRF52840-DK),
 - Connect the SGTL5000 Audio board to the Teensy Shield
 - Connect the Teensy Shield to the nRF52-DK
 - Connect a speaker or headphone to the jack plug on the audio board
-- Upload precompiled .hex file found in the repository, "TODO_INSERT_NAME_HERE", to the nRF52840-DK
-- Connect a micro USB cable between the PC and the 'nRF USB' on the long edge of the DK. Reset the DK.
+- Upload precompiled .hex file found in the repository, "nrf52840-ble-app-hrs-usb-audio-teensy_app_s140.hex", to the nRF52840-DK
+- Connect a micro USB cable between the PC and the 'nRF USB' on the long edge of the DK (you probably now also have the normal 
+USB micro cable connected to the short edge, that is fine and it can be used to see the UART logging). Reset the DK.
 
 
 #### What to expect
 When the application is running, and after a reset, your PC might automatically detect the nRF USB Audio streams - input and output.
 My PC swaps automatically over to using the "Headphones (nRF52 USB Audio Demo)" output, as well as the nRF52 USB input. After your PC is
 configured to use the nRF52 "Headphones", play your favorite youtube video or something else that has audio, and the audio should be played on the 
-headphones/speaker that is connected to the Teensy Audio Board. Success!:D
+headphones/speaker that is connected to the Teensy Audio Board. Success!:D You should now also be able to connect to the BLE HRS using nRF Connect 
+on your phone or the PC using a Dongle. 
 
 If you are having issues getting the headphones/speakers to work, I suggest you modify the source code to enable Microphone
 playback loop `drv_sgtl5000_start_mic_loopback()` in `main()` and make sure that works before you try to play the USB audio.
+If this does not work either, I suggest going back to the standalone Teensy Audio Board example and make sure that runs before
+testing this demo.
 
 
 
@@ -81,6 +85,14 @@ The example assumes a location of this repository matching the following path fo
 There is both Keil and SES project files that can be used for development. Please note that if you use one for 
 development and not the other, I would recommend deleting the one that is not used to avoid confusion at a later 
 stage when you might think both projects in the repository are up to date - but in fact they are not.
+
+
+## FW Overview
+This example works by forwarding the received USB audio data in `hp_audio_user_ev_handler()` to a application 
+event handler. The event used for this is named `AUA_EVENT_USB_USER_EVT_RX_DONE`. The application then takes this 
+USB audio data and puts it into a queue, this is done in `application_usb_audio_callback()`. The I2S callback function,
+`i2s_sgtl5000_driver_evt_handler()`, which is basically the I2S peripheral library requesting data from the application, 
+checks this same queue, and if there are any frames to be played, it will pop them off and play it.
 
 ## TODO Add more documentation.
 
